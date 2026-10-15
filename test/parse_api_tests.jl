@@ -15,6 +15,15 @@ function parse_outcome(::Type{FD}, s, mode=RoundNearest) where {FD}
     end
 end
 
+# Compare `parse`/`tryparse` against the reference, logging the first few mismatches.
+# Returns the updated mismatch count.
+function check_against_reference(::Type{FD}, s, mode, nbad) where {FD}
+    got, expected = parse_outcome(FD, s, mode), reference_outcome(FD, s, mode)
+    got == expected && tryparse_agrees(FD, s, mode) && return nbad
+    nbad < 10 && @error "mismatch" FD s mode got expected
+    return nbad + 1
+end
+
 # `tryparse` must return `nothing` exactly when `parse` throws, and agree with it otherwise.
 function tryparse_agrees(::Type{FD}, s, mode=RoundNearest) where {FD}
     res = tryparse(FD, s, mode)
@@ -205,10 +214,7 @@ end
         nbad = 0
         for s in inputs, T in types, f in unique((0, 1, 2, ndigits(typemax(T)) - 1)), mode in (RoundNearest, RoundToZero, RoundThrows)
             FD = FixedDecimal{T,f}
-            if parse_outcome(FD, s, mode) != reference_outcome(FD, s, mode) || !tryparse_agrees(FD, s, mode)
-                nbad += 1
-                nbad <= 10 && @error "mismatch" FD s mode parse_outcome(FD, s, mode) reference_outcome(FD, s, mode)
-            end
+            nbad = check_against_reference(FD, s, mode, nbad)
         end
         @test nbad == 0
     end
@@ -237,10 +243,7 @@ end
             f = rand(rng, 0:ndigits(typemax(T))-1)
             mode = rand(rng, (RoundNearest, RoundToZero, RoundThrows))
             FD = FixedDecimal{T,f}
-            if parse_outcome(FD, s, mode) != reference_outcome(FD, s, mode) || !tryparse_agrees(FD, s, mode)
-                nbad += 1
-                nbad <= 10 && @error "mismatch" FD s mode parse_outcome(FD, s, mode) reference_outcome(FD, s, mode)
-            end
+            nbad = check_against_reference(FD, s, mode, nbad)
         end
         @test nbad == 0
     end

@@ -11,9 +11,6 @@ const _INVALID  = 0x01  # malformed input, or a negative value for an unsigned t
 const _OVERFLOW = 0x02  # the value doesn't fit the backing integer type
 const _INEXACT  = 0x04  # rounding was needed but the rounding mode is `RoundThrows`
 
-# `n * 10^decpos`
-@inline _shift(n::T, decpos) where {T} = _pow10(T, decpos) * n
-
 _pow10(::Type{T}, n) where {T} = T(10)^n
 for T in (Base.BitSigned_types..., Base.BitUnsigned_types...)
     let bytes = Tuple(codeunits(string(typemax(T))))
@@ -49,10 +46,10 @@ _check_overflows(::Type{T}, v::T, neg::Bool) where {T <: Integer} = false
 # x is non-negative, pow is >= 1
 # `!` to signal we mutate bigints in-place
 function _divpow10!(x::T, code, pow, mode::RoundingMode) where {T}
-    return div(x, _shift(one(T), pow), mode), code
+    return div(x, _pow10(T, pow), mode), code
 end
 function _divpow10!(x::T, code, pow, ::RoundingMode{:Throw}) where {T}
-    q, r = divrem(x, _shift(one(T), pow))
+    q, r = divrem(x, _pow10(T, pow))
     r == 0 || (code |= _INEXACT)
     return q, code
 end
@@ -90,7 +87,8 @@ end
 # Rescale the accumulated digits into the integer backing a `FixedDecimal{T,f}`.
 # The parsed value is `(-1)^neg * digits * 10^exp`, where `digits` has `ndigits` significant
 # digits (`ndigits == 0` iff `digits == 0`).
-@inline function _scale(::Type{T}, f::Int, digits::V, exp::Int, neg::Bool, code::UInt8, ndigits::Int, rounding::RoundingMode) where {T,V}
+@inline function _scale(::Type{T}, f::Int, digits::V, exp::Int, neg::Bool, ndigits::Int, rounding::RoundingMode) where {T,V}
+    code = _OK
     # Positive: how many trailing zeroes we need to add to our integer
     # Negative: how many digits are past our precision (we need to handle them in rounding)
     decimal_shift = f + exp
@@ -120,10 +118,10 @@ end
             # `digits` has fewer than `_maxintdigits(T)` digits here, so it fits in `T`
             r = _unsafe_convert_int(T, digits)
             if may_overflow
-                i, overflowed = Base.mul_with_overflow(r, _shift(one(T), decimal_shift))
+                i, overflowed = Base.mul_with_overflow(r, _pow10(T, decimal_shift))
                 overflowed && (code |= _OVERFLOW)
             else
-                i = _shift(r, decimal_shift)
+                i = _pow10(T, decimal_shift) * r
             end
         elseif decimal_shift < 0
             if -decimal_shift > _maxaccdigits(V)
@@ -132,12 +130,8 @@ end
                 # `digits < 10^-decimal_shift / 2`, so the result always rounds to zero.
                 r = zero(V)
                 (rounding === RoundThrows) && (code |= _INEXACT)
-            elseif rounding === RoundNearest
-                r, code = _divpow10!(digits, code, -decimal_shift, RoundNearest)
-            elseif rounding === RoundToZero
-                r, code = _divpow10!(digits, code, -decimal_shift, RoundToZero)
             else
-                r, code = _divpow10!(digits, code, -decimal_shift, RoundThrows)
+                r, code = _divpow10!(digits, code, -decimal_shift, rounding)
             end
             # Now that the digits were rescaled we can check for overflow
             # can happen e.g. if digits were unsigned ints and out type is signed
@@ -156,18 +150,16 @@ end
 @inline _isblank(b::UInt8) = (b == UInt8(' ')) | (b == UInt8('\t'))
 
 # How many decimal digits the digit accumulator can hold without overflowing
-_maxaccdigits(::Type{UInt64}) = 19
-_maxaccdigits(::Type{UInt128}) = 38
+_maxaccdigits(::Type{V}) where {V<:Union{UInt64,UInt128}} = max_exp10(V)
 _maxaccdigits(::Type{BigInt}) = typemax(Int)
-
-_widen_acc(x::UInt64) = UInt128(x)
-_widen_acc(x::UInt128) = BigInt(x)
 
 # `acc * 10^n + d`, mutating BigInts in place
 @inline _push_digits(acc::V, n::Int, d::UInt8) where {V<:Union{UInt64,UInt128}} = acc * _pow10(V, n) + d
 function _push_digits(acc::BigInt, n::Int, d::UInt8)
-    for _ in 1:n
-        Base.GMP.MPZ.mul_ui!(acc, UInt(10))
+    while n > 0
+        k = min(n, _maxaccdigits(UInt64))
+        Base.GMP.MPZ.mul_ui!(acc, _pow10(UInt64, k))
+        n -= k
     end
     Base.GMP.MPZ.add_ui!(acc, UInt(d))
     return acc
@@ -179,7 +171,6 @@ end
     x, o2 = Base.add_with_overflow(x, V(d))
     return x, o1 | o2
 end
-_push_digits_checked(acc::BigInt, n::Int, d::UInt8) = (_push_digits(acc, n, d), false)
 
 # Exponents are saturated at this magnitude, far past anything that could fit any `T`, and
 # past the exponent implied by the position of the decimal point in any input that fits in
@@ -248,7 +239,9 @@ function _parse_mantissa(
             elseif ndigits + zeros + 1 > _maxintdigits(T) + 1
                 sticky = true
                 zeros += 1
-            elseif ndigits + zeros + 1 > _maxaccdigits(V)
+            # (the first check is a compile-time constant, so e.g. `T == Int64` never compiles the
+            # widening to a `BigInt` accumulator)
+            elseif _maxaccdigits(V) < _maxintdigits(T) + 1 && ndigits + zeros + 1 > _maxaccdigits(V)
                 # One more digit may still fit, e.g. most 20-digit numbers fit in a UInt64
                 if ndigits + zeros == _maxaccdigits(V)
                     acc2, overflowed = _push_digits_checked(acc, zeros + 1, d)
@@ -260,7 +253,7 @@ function _parse_mantissa(
                         continue
                     end
                 end
-                return _parse_mantissa_wide(T, f, bytes, pos, last, neg, rounding, _widen_acc(acc), ndigits, zeros, nfrac - seen_point, seen_point, seen_digit, sticky)
+                return @noinline _parse_mantissa(T, f, bytes, pos, last, neg, rounding, widen(acc), ndigits, zeros, nfrac - seen_point, seen_point, seen_digit, sticky)
             else
                 # N.B. `zeros == 0` whenever `ndigits == 0`
                 acc = (zeros == 0 && V !== BigInt) ? acc * V(10) + d : _push_digits(acc, zeros + 1, d)
@@ -296,9 +289,6 @@ end
     end
     return chunk, k
 end
-
-@noinline _parse_mantissa_wide(::Type{T}, f, bytes, pos, last, neg, rounding, acc, ndigits, zeros, nfrac, seen_point, seen_digit, sticky) where {T} =
-    _parse_mantissa(T, f, bytes, pos, last, neg, rounding, acc, ndigits, zeros, nfrac, seen_point, seen_digit, sticky)
 
 # `acc * 10^n + 1` in an accumulator that can hold `_maxintdigits(T) + 2` digits
 @noinline function _push_sticky(::Type{T}, acc, n::Int) where {T}
@@ -339,7 +329,7 @@ end
         end
         pos <= last && return (zero(T), _INVALID)
     end
-    return _scale(T, f, acc, exp, neg, _OK, ndigits, rounding)
+    return _scale(T, f, acc, exp, neg, ndigits, rounding)
 end
 
 function _check_rounding_mode(mode::RoundingMode)

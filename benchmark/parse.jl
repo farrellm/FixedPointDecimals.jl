@@ -32,10 +32,11 @@ const CASES = [
 ]
 
 const INVALID_CASES = [
-    ("invalid foo",      FixedDecimal{Int64,4}, "foo"),
-    ("invalid 1.2.3",    FixedDecimal{Int64,4}, "1.2.3"),
-    ("overflow 1e100",   FixedDecimal{Int64,4}, "1e100"),
-    ("inexact (throws)", FixedDecimal{Int64,2}, "0.455"),
+    # (name, type, input, rounding mode); benchmarked with `tryparse` only
+    ("invalid foo",      FixedDecimal{Int64,4}, "foo",   RoundNearest),
+    ("invalid 1.2.3",    FixedDecimal{Int64,4}, "1.2.3", RoundNearest),
+    ("overflow 1e100",   FixedDecimal{Int64,4}, "1e100", RoundNearest),
+    ("inexact (throws)", FixedDecimal{Int64,2}, "0.455", RoundThrows),
 ]
 
 SUITE["parse"] = BenchmarkGroup()
@@ -47,8 +48,7 @@ for (name, T, s, mode) in CASES
     SUITE["parse"][name] = @benchmarkable $p($s, $mode)
     SUITE["tryparse"][name] = @benchmarkable $tp($s, $mode)
 end
-for (name, T, s) in INVALID_CASES
-    mode = startswith(name, "inexact") ? RoundThrows : RoundNearest
+for (name, T, s, mode) in INVALID_CASES
     tp = Base.Fix1(tryparse, T)
     SUITE["tryparse"][name] = @benchmarkable $tp($s, $mode)
 end

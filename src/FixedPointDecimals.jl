@@ -40,7 +40,6 @@ export checked_abs, checked_add, checked_cld, checked_div, checked_fld,
 using Base: decompose, BitInteger
 
 using BitIntegers: BitIntegers, Int256, Int512, UInt256, UInt512
-import Parsers
 
 # The effects system in newer versions of Julia is necessary for the fldmod_by_const
 # optimization to take effect without adverse performance impacts.
@@ -138,7 +137,7 @@ include("parse.jl")
 const _BIGINT1 = BigInt(1)
 const _BIGINT2 = BigInt(2)
 const _BIGINT10 = BigInt(10)
-# Adapted from Parsers.jl, see https://github.com/JuliaData/Parsers.jl/pull/195
+# Task-local scratch BigInts for `_divpow10!`, adapted from Parsers.jl (https://github.com/JuliaData/Parsers.jl/pull/195)
 @static if isdefined(Base, :OncePerTask)
     const _get_bigint10s = OncePerTask{BigInt}(() -> BigInt(; nbits=256))
     const _get_bigintRs = OncePerTask{BigInt}(() -> BigInt(; nbits=256))

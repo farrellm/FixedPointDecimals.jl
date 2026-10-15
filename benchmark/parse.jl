@@ -40,13 +40,17 @@ const INVALID_CASES = [
 
 SUITE["parse"] = BenchmarkGroup()
 SUITE["tryparse"] = BenchmarkGroup()
+# N.B. Interpolating a type into `@benchmarkable` makes it a `DataType` variable, so the
+# benchmark would be dominated by dynamic dispatch. `Base.Fix1` stores it as `Type{T}` instead.
 for (name, T, s, mode) in CASES
-    SUITE["parse"][name] = @benchmarkable parse($T, $s, $mode)
-    SUITE["tryparse"][name] = @benchmarkable tryparse($T, $s, $mode)
+    p, tp = Base.Fix1(parse, T), Base.Fix1(tryparse, T)
+    SUITE["parse"][name] = @benchmarkable $p($s, $mode)
+    SUITE["tryparse"][name] = @benchmarkable $tp($s, $mode)
 end
 for (name, T, s) in INVALID_CASES
     mode = startswith(name, "inexact") ? RoundThrows : RoundNearest
-    SUITE["tryparse"][name] = @benchmarkable tryparse($T, $s, $mode)
+    tp = Base.Fix1(tryparse, T)
+    SUITE["tryparse"][name] = @benchmarkable $tp($s, $mode)
 end
 
 function random_decimal_strings(rng, n)

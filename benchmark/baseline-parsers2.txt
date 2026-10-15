@@ -1,40 +1,40 @@
 # FixedPointDecimals parse benchmarks
 # Julia 1.13.1, FixedPointDecimals 0.6.5, Intel(R) Core(TM) i7-8550U CPU @ 1.80GHz
 # median time | allocations | memory
-parse     FD{Int128,18} near typemax                   233.520 ns      1 allocs   32 bytes
-parse     FD{Int128,2} 30 digits                       204.734 ns      1 allocs   32 bytes
-parse     FD{Int32,4} short                            170.428 ns      1 allocs   16 bytes
-parse     FD{Int64,2} integer                          156.227 ns      1 allocs   16 bytes
-parse     FD{Int64,2} negative                         152.378 ns      1 allocs   16 bytes
-parse     FD{Int64,2} round nearest                    160.538 ns      1 allocs   16 bytes
-parse     FD{Int64,2} round throws                     156.090 ns      1 allocs   16 bytes
-parse     FD{Int64,2} round to zero                    156.463 ns      1 allocs   16 bytes
-parse     FD{Int64,2} short                            148.762 ns      1 allocs   16 bytes
-parse     FD{Int64,2} whitespace                       153.428 ns      1 allocs   16 bytes
-parse     FD{Int64,2} zero                             139.164 ns      1 allocs   16 bytes
-parse     FD{Int64,4} 60 digits (BigInt)               821.821 ns      1 allocs   16 bytes
-parse     FD{Int64,4} exp neg                          151.133 ns      1 allocs   16 bytes
-parse     FD{Int64,4} exp pos                          155.379 ns      1 allocs   16 bytes
-parse     FD{Int64,8} long                             181.959 ns      1 allocs   16 bytes
-parse     FD{UInt64,2} short                           146.746 ns      1 allocs   16 bytes
-tryparse  FD{Int128,18} near typemax                   236.086 ns      1 allocs   32 bytes
-tryparse  FD{Int128,2} 30 digits                       214.672 ns      1 allocs   32 bytes
-tryparse  FD{Int32,4} short                            168.091 ns      1 allocs   16 bytes
-tryparse  FD{Int64,2} integer                          155.360 ns      1 allocs   16 bytes
-tryparse  FD{Int64,2} negative                         152.522 ns      1 allocs   16 bytes
-tryparse  FD{Int64,2} round nearest                    158.746 ns      1 allocs   16 bytes
-tryparse  FD{Int64,2} round throws                     157.029 ns      1 allocs   16 bytes
-tryparse  FD{Int64,2} round to zero                    156.048 ns      1 allocs   16 bytes
-tryparse  FD{Int64,2} short                            154.232 ns      1 allocs   16 bytes
-tryparse  FD{Int64,2} whitespace                       156.393 ns      1 allocs   16 bytes
-tryparse  FD{Int64,2} zero                             142.504 ns      1 allocs   16 bytes
-tryparse  FD{Int64,4} 60 digits (BigInt)               847.935 ns      1 allocs   16 bytes
-tryparse  FD{Int64,4} exp neg                          154.606 ns      1 allocs   16 bytes
-tryparse  FD{Int64,4} exp pos                          157.768 ns      1 allocs   16 bytes
-tryparse  FD{Int64,8} long                             187.753 ns      1 allocs   16 bytes
-tryparse  FD{UInt64,2} short                           155.347 ns      1 allocs   16 bytes
-tryparse  inexact (throws)                             149.704 ns      0 allocs    0 bytes
-tryparse  invalid 1.2.3                                148.661 ns      0 allocs    0 bytes
-tryparse  invalid foo                                  130.583 ns      0 allocs    0 bytes
-tryparse  overflow 1e100                               144.295 ns      0 allocs    0 bytes
-throughput parse.(FD{Int64,4}, 10^5 strings)              5.018 ms      3 allocs 781.32 KiB
+parse     FD{Int128,18} near typemax                   117.750 ns      0 allocs    0 bytes
+parse     FD{Int128,2} 30 digits                       100.270 ns      0 allocs    0 bytes
+parse     FD{Int32,4} short                             39.841 ns      0 allocs    0 bytes
+parse     FD{Int64,2} integer                           41.455 ns      0 allocs    0 bytes
+parse     FD{Int64,2} negative                          35.612 ns      0 allocs    0 bytes
+parse     FD{Int64,2} round nearest                     41.797 ns      0 allocs    0 bytes
+parse     FD{Int64,2} round throws                      39.303 ns      0 allocs    0 bytes
+parse     FD{Int64,2} round to zero                     39.602 ns      0 allocs    0 bytes
+parse     FD{Int64,2} short                             32.794 ns      0 allocs    0 bytes
+parse     FD{Int64,2} whitespace                        37.414 ns      0 allocs    0 bytes
+parse     FD{Int64,2} zero                              23.298 ns      0 allocs    0 bytes
+parse     FD{Int64,4} 60 digits (BigInt)               711.514 ns      0 allocs    0 bytes
+parse     FD{Int64,4} exp neg                           35.897 ns      0 allocs    0 bytes
+parse     FD{Int64,4} exp pos                           39.841 ns      0 allocs    0 bytes
+parse     FD{Int64,8} long                              62.087 ns      0 allocs    0 bytes
+parse     FD{UInt64,2} short                            32.404 ns      0 allocs    0 bytes
+tryparse  FD{Int128,18} near typemax                   115.761 ns      0 allocs    0 bytes
+tryparse  FD{Int128,2} 30 digits                       101.644 ns      0 allocs    0 bytes
+tryparse  FD{Int32,4} short                             41.007 ns      0 allocs    0 bytes
+tryparse  FD{Int64,2} integer                           40.804 ns      0 allocs    0 bytes
+tryparse  FD{Int64,2} negative                          34.265 ns      0 allocs    0 bytes
+tryparse  FD{Int64,2} round nearest                     40.750 ns      0 allocs    0 bytes
+tryparse  FD{Int64,2} round throws                      39.320 ns      0 allocs    0 bytes
+tryparse  FD{Int64,2} round to zero                     37.697 ns      0 allocs    0 bytes
+tryparse  FD{Int64,2} short                             30.382 ns      0 allocs    0 bytes
+tryparse  FD{Int64,2} whitespace                        37.335 ns      0 allocs    0 bytes
+tryparse  FD{Int64,2} zero                              21.486 ns      0 allocs    0 bytes
+tryparse  FD{Int64,4} 60 digits (BigInt)               750.487 ns      0 allocs    0 bytes
+tryparse  FD{Int64,4} exp neg                           36.108 ns      0 allocs    0 bytes
+tryparse  FD{Int64,4} exp pos                           39.550 ns      0 allocs    0 bytes
+tryparse  FD{Int64,8} long                              62.327 ns      0 allocs    0 bytes
+tryparse  FD{UInt64,2} short                            33.441 ns      0 allocs    0 bytes
+tryparse  inexact (throws)                              38.746 ns      0 allocs    0 bytes
+tryparse  invalid 1.2.3                                 36.921 ns      0 allocs    0 bytes
+tryparse  invalid foo                                   16.922 ns      0 allocs    0 bytes
+tryparse  overflow 1e100                                32.884 ns      0 allocs    0 bytes
+throughput parse.(FD{Int64,4}, 10^5 strings)              5.250 ms      3 allocs 781.32 KiB

@@ -181,9 +181,11 @@ end
 end
 _push_digits_checked(acc::BigInt, n::Int, d::UInt8) = (_push_digits(acc, n, d), false)
 
-# Exponents are saturated at this magnitude, far past anything that could fit any `T`.
-# Small enough that `10 * _MAXEXP + 9` doesn't overflow a 32-bit `Int`.
-const _MAXEXP = 100_000_000
+# Exponents are saturated at this magnitude, far past anything that could fit any `T`, and
+# past the exponent implied by the position of the decimal point in any input that fits in
+# memory (so that e.g. "0.<10^9 zeros>1e1000000001" still parses as 1).
+# Small enough that `10 * _MAXEXP + 9`, plus such an implied exponent, doesn't overflow an `Int`.
+const _MAXEXP = Int === Int64 ? 100_000_000_000_000_000 : 100_000_000
 
 # Parse `bytes[pos:last]` as the backing integer of a `FixedDecimal{T,f}`, returning `(value, code)`.
 #
@@ -261,7 +263,7 @@ function _parse_mantissa(
                 return _parse_mantissa_wide(T, f, bytes, pos, last, neg, rounding, _widen_acc(acc), ndigits, zeros, nfrac - seen_point, seen_point, seen_digit, sticky)
             else
                 # N.B. `zeros == 0` whenever `ndigits == 0`
-                acc = zeros == 0 ? acc * V(10) + d : _push_digits(acc, zeros + 1, d)
+                acc = (zeros == 0 && V !== BigInt) ? acc * V(10) + d : _push_digits(acc, zeros + 1, d)
                 ndigits += zeros + 1
                 zeros = 0
             end
@@ -346,13 +348,13 @@ function _check_rounding_mode(mode::RoundingMode)
     end
 end
 
-function _base_parse(::Type{FD{T, f}}, source::Union{String, SubString{String}}, mode::RoundingMode) where {T, f}
+function _base_parse(::Type{FD{T, f}}, source::AbstractString, mode::RoundingMode) where {T, f}
+    # Strings with non-UTF-8 code units (e.g. UTF-16) are transcoded first
+    codeunit(source) === UInt8 || return _base_parse(FD{T, f}, String(source), mode)
     _check_rounding_mode(mode)
     bytes = codeunits(source)
     return _parse_fixed(T, Int(f), bytes, 1, length(bytes), mode)
 end
-_base_parse(::Type{FD{T, f}}, source::AbstractString, mode::RoundingMode) where {T, f} =
-    _base_parse(FD{T, f}, String(source), mode)
 
 function Base.tryparse(::Type{FD{T, f}}, source::AbstractString, mode::RoundingMode=RoundNearest) where {T, f}
     val, code = _base_parse(FD{T, f}, source, mode)

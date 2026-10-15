@@ -110,6 +110,10 @@ end
         @test parse_outcome(FD2, "1.234x", RoundThrows) == "Argument"
         @test parse_outcome(FD2, "1e100x") == "Argument"
         @test parse_outcome(FixedDecimal{Int8,1}, "-5571,50") == "Argument"
+        # `f`/`F` are not exponent markers (v0.6.5 accepted Float32-literal style "1.5f0", like Parsers.jl v2)
+        for s in ("1.5f0", "1.5F0", "1f5", "1.5f-1")
+            @test parse_outcome(FD2, s) == "Argument"
+        end
         # Overflow when scaling by a power of 10 is detected (v0.6.5 silently wrapped around)
         @test parse_outcome(FixedDecimal{UInt8,0}, "9e2") == "Overflow"
         @test parse_outcome(FixedDecimal{UInt8,0}, "90e1") == "Overflow"
@@ -246,6 +250,8 @@ end
         @test tryparse(FD2, SubString("xx1.25yy", 3, 6)) == FD2(1.25)
         @test_throws ArgumentError parse(FD2, SubString("xx1.25yy", 3, 7))  # trailing junk
         @test isnothing(tryparse(FD2, SubString("xx1.25yy", 2, 6)))         # leading junk
+        @test parse(FD2, Test.GenericString(" -1.25 ")) == FD2(-1.25)
+        @test isnothing(tryparse(FD2, Test.GenericString("1.25x")))
     end
 
     @testset "rounding modes" begin

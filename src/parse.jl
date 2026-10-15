@@ -153,15 +153,16 @@ end
 _maxaccdigits(::Type{V}) where {V<:Union{UInt64,UInt128}} = max_exp10(V)
 _maxaccdigits(::Type{BigInt}) = typemax(Int)
 
-# `acc * 10^n + d`, mutating BigInts in place
+# `acc * 10^n + d`, mutating BigInts in place.
+# GMP's `*_ui` functions take a `Culong`, which is only 32 bits on Windows and 32-bit platforms.
 @inline _push_digits(acc::V, n::Int, d::UInt8) where {V<:Union{UInt64,UInt128}} = acc * _pow10(V, n) + d
 function _push_digits(acc::BigInt, n::Int, d::UInt8)
     while n > 0
-        k = min(n, _maxaccdigits(UInt64))
-        Base.GMP.MPZ.mul_ui!(acc, _pow10(UInt64, k))
+        k = min(n, max_exp10(Culong))
+        Base.GMP.MPZ.mul_ui!(acc, _pow10(Culong, k))
         n -= k
     end
-    Base.GMP.MPZ.add_ui!(acc, UInt(d))
+    Base.GMP.MPZ.add_ui!(acc, Culong(d))
     return acc
 end
 

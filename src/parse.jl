@@ -12,10 +12,11 @@ const _OVERFLOW = 0x02  # the value doesn't fit the backing integer type
 const _INEXACT  = 0x04  # rounding was needed but the rounding mode is `RoundThrows`
 
 _pow10(::Type{T}, n) where {T} = T(10)^n
-for T in (Base.BitSigned_types..., Base.BitUnsigned_types...)
+for T in (Base.BitSigned_types..., Base.BitUnsigned_types..., UInt256)
     let bytes = Tuple(codeunits(string(typemax(T))))
-        # The number of digits an integer of type T can hold
-        @eval _maxintdigits(::Type{$T}) = $(length(bytes))
+        # The number of digits an integer of type T can hold. Not defined for `UInt256`, which is
+        # only here for the lookup table: the parser doesn't support it as a backing type.
+        T === UInt256 || @eval _maxintdigits(::Type{$T}) = $(length(bytes))
         # Lookup table of the powers of 10 that fit in T
         pow10s = Tuple(T(10)^i for i in 0:length(bytes)-1)
         @eval @inline function _pow10(::Type{$T}, n)
@@ -31,57 +32,59 @@ function _unsafe_convert_int(::Type{T}, v::V) where {T<:Integer,V<:Integer}
            sizeof(T) < sizeof(V) ? unsafe_trunc(T, v) :
            Base.bitcast(T, v)
 end
-_unsafe_convert_int(::Type{T}, v::BigInt) where {T<:Integer} = unsafe_trunc(T, v)
 _unsafe_convert_int(::Type{T}, v::T) where {T<:Integer} = v
 
-function _check_overflows(::Type{T}, v::BigInt, neg::Bool) where {T<:Integer}
-    return neg ? -v < typemin(T) : v > typemax(T)
-end
-function _check_overflows(::Type{T}, v::V, neg::Bool) where {T<:Integer,V<:Union{UInt64,UInt128}}
+function _check_overflows(::Type{T}, v::V, neg::Bool) where {T<:Integer,V<:Union{UInt64,UInt128,UInt256}}
     return sizeof(T) <= sizeof(V) && (neg ? v > _unsafe_convert_int(V, typemax(T)) + one(V) : v > typemax(T))
 end
 _check_overflows(::Type{T}, v::T, neg::Bool) where {T <: Integer} = false
 
-# `x = div(x, 10^pow, mode)`; may set code |= INEXACT for RoundThrows
-# x is non-negative, pow is >= 1
-# `!` to signal we mutate bigints in-place
-function _divpow10!(x::T, code, pow, mode::RoundingMode) where {T}
-    return div(x, _pow10(T, pow), mode), code
-end
-function _divpow10!(x::T, code, pow, ::RoundingMode{:Throw}) where {T}
-    q, r = divrem(x, _pow10(T, pow))
-    r == 0 || (code |= _INEXACT)
-    return q, code
-end
-function _divpow10!(x::BigInt, code, pow, ::RoundingMode{:Nearest})
-    # adapted from https://github.com/JuliaLang/julia/blob/112554e1a533cebad4cb0daa27df59636405c075/base/div.jl#L217
-    r = _get_bigintRs()  # we must not yield here!
-    y = _get_bigint10s() # we must not yield here!
-    Base.GMP.MPZ.set!(y, _BIGINT10)             # y = 10
-    Base.GMP.MPZ.pow_ui!(y, pow)                # y = y^pow
-    Base.GMP.MPZ.tdiv_qr!(x, r, x, y)           # x, r = divrem(x, y)
-    Base.GMP.MPZ.tdiv_q!(y, _BIGINT2)           # y = div(y, 2)
-    iseven(x) && Base.GMP.MPZ.add!(y, _BIGINT1) # y = y + iseven(x)
-    if r >= y
-        Base.GMP.MPZ.add!(x, _BIGINT1)          # x = x + (r >= y)
+# `div(x, 10^pow)` and `divrem(x, 10^pow)`
+_div_pow10(x::T, pow) where {T} = div(x, _pow10(T, pow))
+_divrem_pow10(x::T, pow) where {T} = divrem(x, _pow10(T, pow))
+
+# BitIntegers' generic 256-bit division is slow, so for the `UInt256` accumulator we divide by
+# `10^pow` in steps of at most `10^19`, each a schoolbook long division over 64-bit limbs.
+function _div_u64(x::UInt256, d::UInt64)
+    q = zero(UInt256)
+    r = UInt64(0)
+    for i in 3:-1:0
+        cur = (UInt128(r) << 64) | ((x >> (64 * i)) % UInt64)
+        if cur < d
+            # Skips the division for the leading zero limbs
+            r = cur % UInt64
+        else
+            qi = div(cur, d) % UInt64  # fits since `r < d`
+            r = (cur % UInt64) - qi * d
+            q |= UInt256(qi) << (64 * i)
+        end
     end
-    return x, code
+    return q
 end
-function _divpow10!(x::BigInt, code, pow, ::RoundingMode{:ToZero})
-    y = _get_bigint10s() # we must not yield here!
-    Base.GMP.MPZ.set!(y, _BIGINT10) # y = 10
-    Base.GMP.MPZ.pow_ui!(y, pow)    # y = y^pow
-    Base.GMP.MPZ.tdiv_q!(x, y)      # x = div(x, y)
-    return x, code
+function _div_pow10(x::UInt256, pow)
+    while pow > 0
+        k = min(pow, max_exp10(UInt64))
+        x = _div_u64(x, _pow10(UInt64, k))
+        pow -= k
+    end
+    return x
+end
+function _divrem_pow10(x::UInt256, pow)
+    q = _div_pow10(x, pow)
+    return q, x - q * _pow10(UInt256, pow)
 end
 
-function _divpow10!(x::BigInt, code, pow, ::RoundingMode{:Throw})
-    y = _get_bigint10s() # we must not yield here!
-    Base.GMP.MPZ.set!(y, _BIGINT10)   # y = 10
-    Base.GMP.MPZ.pow_ui!(y, pow)      # y = y^pow
-    Base.GMP.MPZ.tdiv_qr!(x, y, x, y) # x, y = divrem(x, y)
-    y == 0 || (code |= _INEXACT)
-    return x, code
+# `x = div(x, 10^pow, mode)`; may set code |= INEXACT for RoundThrows
+# x is non-negative, pow is >= 1
+_divpow10(x, code, pow, ::RoundingMode{:ToZero}) = _div_pow10(x, pow), code
+function _divpow10(x::T, code, pow, mode::RoundingMode{:Nearest}) where {T}
+    q, r = _divrem_pow10(x, pow)
+    return _round_to_nearest(q, r, _pow10(T, pow), mode), code
+end
+function _divpow10(x, code, pow, ::RoundingMode{:Throw})
+    q, r = _divrem_pow10(x, pow)
+    r == 0 || (code |= _INEXACT)
+    return q, code
 end
 
 # Rescale the accumulated digits into the integer backing a `FixedDecimal{T,f}`.
@@ -131,7 +134,7 @@ end
                 r = zero(V)
                 (rounding === RoundThrows) && (code |= _INEXACT)
             else
-                r, code = _divpow10!(digits, code, -decimal_shift, rounding)
+                r, code = _divpow10(digits, code, -decimal_shift, rounding)
             end
             # Now that the digits were rescaled we can check for overflow
             # can happen e.g. if digits were unsigned ints and out type is signed
@@ -150,21 +153,10 @@ end
 @inline _isblank(b::UInt8) = (b == UInt8(' ')) | (b == UInt8('\t'))
 
 # How many decimal digits the digit accumulator can hold without overflowing
-_maxaccdigits(::Type{V}) where {V<:Union{UInt64,UInt128}} = max_exp10(V)
-_maxaccdigits(::Type{BigInt}) = typemax(Int)
+_maxaccdigits(::Type{V}) where {V<:Union{UInt64,UInt128,UInt256}} = max_exp10(V)
 
-# `acc * 10^n + d`, mutating BigInts in place.
-# GMP's `*_ui` functions take a `Culong`, which is only 32 bits on Windows and 32-bit platforms.
-@inline _push_digits(acc::V, n::Int, d::UInt8) where {V<:Union{UInt64,UInt128}} = acc * _pow10(V, n) + d
-function _push_digits(acc::BigInt, n::Int, d::UInt8)
-    while n > 0
-        k = min(n, max_exp10(Culong))
-        Base.GMP.MPZ.mul_ui!(acc, _pow10(Culong, k))
-        n -= k
-    end
-    Base.GMP.MPZ.add_ui!(acc, Culong(d))
-    return acc
-end
+# `acc * 10^n + d`
+@inline _push_digits(acc::V, n::Int, d::UInt8) where {V} = acc * _pow10(V, n) + d
 
 # `acc * 10^n + d` and whether it overflowed, assuming `10^n` itself fits in `V`
 @inline function _push_digits_checked(acc::V, n::Int, d::UInt8) where {V<:Union{UInt64,UInt128}}
@@ -173,9 +165,10 @@ end
     return x, o1 | o2
 end
 
-# Exponents are saturated at this magnitude, far past anything that could fit any `T`, and
-# past the exponent implied by the position of the decimal point in any input that fits in
-# memory (so that e.g. "0.<10^9 zeros>1e1000000001" still parses as 1).
+# Exponents are saturated at this magnitude, far past anything that could fit any `T`. On
+# 64-bit it is also past the exponent implied by the position of the decimal point in any
+# input that fits in memory (so that e.g. "0.<10^9 zeros>1e1000000001" still parses as 1);
+# on 32-bit that only holds for inputs shorter than about 10^8 bytes.
 # Small enough that `10 * _MAXEXP + 9`, plus such an implied exponent, doesn't overflow an `Int`.
 const _MAXEXP = Int === Int64 ? 100_000_000_000_000_000 : 100_000_000
 
@@ -208,14 +201,14 @@ end
 # whether any dropped digit was nonzero (`sticky`), and count the dropped digits in `zeros`.
 #
 # When `acc` would overflow, we continue in a wider accumulator. Each width is a separate
-# specialization, which keeps the common `UInt64` case free of allocations and type instability.
-# Thanks to the dropped digits, a `BigInt` is only ever needed for 128-bit `T`.
+# specialization, which keeps the common `UInt64` case free of type instability.
+# Thanks to the dropped digits, a `UInt256` is only ever needed for 128-bit `T`.
 function _parse_mantissa(
     ::Type{T}, f::Int, bytes::AbstractVector{UInt8}, pos::Int, last::Int, neg::Bool, rounding::RoundingMode,
     acc::V, ndigits::Int, zeros::Int, nfrac::Int, seen_point::Bool, seen_digit::Bool, sticky::Bool,
 ) where {T<:Integer,V}
     @inbounds while pos <= last
-        if V !== BigInt && zeros == 0 && ndigits > 0
+        if zeros == 0 && ndigits > 0
             # Fast path for a run of digits after the first significant one: take up to 19 digits
             # at a time in a UInt64, which also avoids slow 128-bit arithmetic for every digit.
             # (Zeros get multiplied in here rather than deferred, which is fine.)
@@ -241,7 +234,7 @@ function _parse_mantissa(
                 sticky = true
                 zeros += 1
             # (the first check is a compile-time constant, so e.g. `T == Int64` never compiles the
-            # widening to a `BigInt` accumulator)
+            # widening to a `UInt256` accumulator)
             elseif _maxaccdigits(V) < _maxintdigits(T) + 1 && ndigits + zeros + 1 > _maxaccdigits(V)
                 # One more digit may still fit, e.g. most 20-digit numbers fit in a UInt64
                 if ndigits + zeros == _maxaccdigits(V)
@@ -254,10 +247,10 @@ function _parse_mantissa(
                         continue
                     end
                 end
-                return @noinline _parse_mantissa(T, f, bytes, pos, last, neg, rounding, widen(acc), ndigits, zeros, nfrac - seen_point, seen_point, seen_digit, sticky)
+                return @noinline _parse_mantissa(T, f, bytes, pos, last, neg, rounding, _widen(acc), ndigits, zeros, nfrac - seen_point, seen_point, seen_digit, sticky)
             else
                 # N.B. `zeros == 0` whenever `ndigits == 0`
-                acc = (zeros == 0 && V !== BigInt) ? acc * V(10) + d : _push_digits(acc, zeros + 1, d)
+                acc = zeros == 0 ? acc * V(10) + d : _push_digits(acc, zeros + 1, d)
                 ndigits += zeros + 1
                 zeros = 0
             end
@@ -293,10 +286,12 @@ end
 
 # `acc * 10^n + 1` in an accumulator that can hold `_maxintdigits(T) + 2` digits
 @noinline function _push_sticky(::Type{T}, acc, n::Int) where {T}
-    if _maxintdigits(T) + 2 <= _maxaccdigits(UInt128)
+    if _maxintdigits(T) + 2 <= _maxaccdigits(UInt64)
+        return _push_digits(UInt64(acc), n, 0x01)
+    elseif _maxintdigits(T) + 2 <= _maxaccdigits(UInt128)
         return _push_digits(UInt128(acc), n, 0x01)
     else
-        return _push_digits(BigInt(acc), n, 0x01)
+        return _push_digits(UInt256(acc), n, 0x01)
     end
 end
 

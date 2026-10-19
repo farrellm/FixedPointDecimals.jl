@@ -12,7 +12,7 @@ parse     FD{Int64,2} round to zero                     39.602 ns      0 allocs 
 parse     FD{Int64,2} short                             32.794 ns      0 allocs    0 bytes
 parse     FD{Int64,2} whitespace                        37.414 ns      0 allocs    0 bytes
 parse     FD{Int64,2} zero                              23.298 ns      0 allocs    0 bytes
-parse     FD{Int64,4} 60 digits (BigInt)               711.514 ns      0 allocs    0 bytes
+parse     FD{Int64,4} 60 digits                        711.514 ns      0 allocs    0 bytes
 parse     FD{Int64,4} exp neg                           35.897 ns      0 allocs    0 bytes
 parse     FD{Int64,4} exp pos                           39.841 ns      0 allocs    0 bytes
 parse     FD{Int64,8} long                              62.087 ns      0 allocs    0 bytes
@@ -28,7 +28,7 @@ tryparse  FD{Int64,2} round to zero                     37.697 ns      0 allocs 
 tryparse  FD{Int64,2} short                             30.382 ns      0 allocs    0 bytes
 tryparse  FD{Int64,2} whitespace                        37.335 ns      0 allocs    0 bytes
 tryparse  FD{Int64,2} zero                              21.486 ns      0 allocs    0 bytes
-tryparse  FD{Int64,4} 60 digits (BigInt)               750.487 ns      0 allocs    0 bytes
+tryparse  FD{Int64,4} 60 digits                        750.487 ns      0 allocs    0 bytes
 tryparse  FD{Int64,4} exp neg                           36.108 ns      0 allocs    0 bytes
 tryparse  FD{Int64,4} exp pos                           39.550 ns      0 allocs    0 bytes
 tryparse  FD{Int64,8} long                              62.327 ns      0 allocs    0 bytes

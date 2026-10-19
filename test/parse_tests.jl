@@ -1,6 +1,6 @@
 using Test
 using FixedPointDecimals
-using FixedPointDecimals: _maxintdigits
+using FixedPointDecimals: _maxintdigits, UInt256
 
 # Compat with test contexts introduced in 1.9
 if VERSION >= v"1.9"
@@ -38,14 +38,14 @@ const IntegerTypes = (SignedIntegerTypes..., UnsignedIntegerTypes...)
 
 @testset "_check_overflows" begin
     @testset "$T" for T in SignedIntegerTypes
-        @testset "$V" for V in (UInt64, UInt128, BigInt)
+        @testset "$V" for V in (UInt64, UInt128, UInt256)
             @test !FixedPointDecimals._check_overflows(T, V(0), true)
             @test !FixedPointDecimals._check_overflows(T, V(0), false)
 
             @test !FixedPointDecimals._check_overflows(T, V(1), true)
             @test !FixedPointDecimals._check_overflows(T, V(1), false)
 
-            if V === BigInt || typemax(T) == typemax(V)
+            if typemax(T) == typemax(V)
                 @test !FixedPointDecimals._check_overflows(T, V(typemax(T) - 1), true)
                 @test !FixedPointDecimals._check_overflows(T, V(typemax(T) - 1), false)
 
@@ -53,7 +53,7 @@ const IntegerTypes = (SignedIntegerTypes..., UnsignedIntegerTypes...)
                 @test !FixedPointDecimals._check_overflows(T, V(typemax(T)), false)
             end
 
-            if V === BigInt || typemax(T) < typemax(V)
+            if typemax(T) < typemax(V)
                 @test !FixedPointDecimals._check_overflows(T, V(V(typemax(T)) + 1), true)
                 @test FixedPointDecimals._check_overflows(T, V(V(typemax(T)) + 1), false)
 
@@ -61,7 +61,7 @@ const IntegerTypes = (SignedIntegerTypes..., UnsignedIntegerTypes...)
                 @test FixedPointDecimals._check_overflows(T, V(V(typemax(T)) + 2), false)
             end
 
-            if V !== BigInt && typemax(T) > typemax(V)
+            if typemax(T) > typemax(V)
                 @test !FixedPointDecimals._check_overflows(T, typemax(V), true)
                 @test !FixedPointDecimals._check_overflows(T, typemax(V), false)
             end
@@ -69,30 +69,22 @@ const IntegerTypes = (SignedIntegerTypes..., UnsignedIntegerTypes...)
     end
 
     @testset "$T" for T in UnsignedIntegerTypes
-        @testset "$V" for V in (UInt64, UInt128, BigInt)
+        @testset "$V" for V in (UInt64, UInt128, UInt256)
             @test !FixedPointDecimals._check_overflows(T, V(0), true)
             @test !FixedPointDecimals._check_overflows(T, V(0), false)
             @test !FixedPointDecimals._check_overflows(T, V(1), false)
 
-            if V === BigInt
-                @test FixedPointDecimals._check_overflows(T, V(1), true)
-                @test FixedPointDecimals._check_overflows(T, V(typemax(T) - 1), true)
-                @test FixedPointDecimals._check_overflows(T, V(typemax(T)), true)
-                @test FixedPointDecimals._check_overflows(T, V(V(typemax(T)) + 1), true)
-                @test FixedPointDecimals._check_overflows(T, V(V(typemax(T)) + 2), true)
-            end
-
-            if V === BigInt || typemax(T) == typemax(V)
+            if typemax(T) == typemax(V)
                 @test !FixedPointDecimals._check_overflows(T, V(typemax(T) - 1), false)
                 @test !FixedPointDecimals._check_overflows(T, V(typemax(T)), false)
             end
 
-            if V === BigInt || typemax(T) < typemax(V)
+            if typemax(T) < typemax(V)
                 @test FixedPointDecimals._check_overflows(T, V(V(typemax(T)) + 1), false)
                 @test FixedPointDecimals._check_overflows(T, V(V(typemax(T)) + 2), false)
             end
 
-            if V !== BigInt && typemax(T) > typemax(V)
+            if typemax(T) > typemax(V)
                 @test !FixedPointDecimals._check_overflows(T, typemax(V), false)
             end
         end

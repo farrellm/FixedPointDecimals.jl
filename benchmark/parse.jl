@@ -22,7 +22,7 @@ const CASES = [
     ("FD{UInt64,2} short",         FixedDecimal{UInt64,2},   "1.23",                    RoundNearest),
     ("FD{Int128,18} near typemax", FixedDecimal{Int128,18},  "170141183460469231731.687303715884105727", RoundNearest),
     ("FD{Int128,2} 30 digits",     FixedDecimal{Int128,2},   "1234567890123456789012345678.90", RoundNearest),
-    ("FD{Int64,4} 60 digits (BigInt)", FixedDecimal{Int64,4}, "9"^60 * "e-50",          RoundNearest),
+    ("FD{Int64,4} 60 digits",      FixedDecimal{Int64,4},    "9"^60 * "e-50",          RoundNearest),
     ("FD{Int64,4} exp neg",        FixedDecimal{Int64,4},    "1.2e-3",                  RoundNearest),
     ("FD{Int64,4} exp pos",        FixedDecimal{Int64,4},    "12e3",                    RoundNearest),
     ("FD{Int64,2} round nearest",  FixedDecimal{Int64,2},    "0.455",                   RoundNearest),

@@ -21,7 +21,7 @@ function randdigits(rng, n)
     return String([rand(rng, (rand(rng, '0':'9'), '0', '9', '5')) for _ in 1:n])
 end
 
-# Mostly short digit runs, sometimes long enough to need UInt128 or BigInt accumulators
+# Mostly short digit runs, sometimes long enough to need UInt128 or UInt256 accumulators
 randlen(rng) = rand(rng) < 0.8 ? rand(rng, 0:6) : rand(rng) < 0.7 ? rand(rng, 0:25) : rand(rng, 0:50)
 
 function randinput(rng)

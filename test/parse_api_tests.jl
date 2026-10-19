@@ -195,7 +195,7 @@ end
         @test parse_outcome(FixedDecimal{Int64,4}, "9"^60 * "e-50") == "100000000000000"
     end
 
-    # Inputs around the widths of the UInt64/UInt128/BigInt digit accumulators
+    # Inputs around the widths of the UInt64/UInt128/UInt256 digit accumulators
     @testset "accumulator widths vs. reference" begin
         digit_strings = String[]
         for base in (string(typemax(UInt64)), string(typemax(UInt128)))
